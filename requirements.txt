@@ -1,0 +1,7 @@
+
+streamlit==1.11.1
+pandas==2.2.3
+matplotlib==3.10.1
+seaborn==0.13.2
+typing-extensions==4.13.1
+protobuf==3.20.3
