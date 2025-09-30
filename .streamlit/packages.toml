@@ -1,0 +1,3 @@
+# .streamlit/packages.toml
+[general]
+python_version = 3.11
