@@ -145,7 +145,7 @@ class AnaliseScoresQI:
         return pd.DataFrame(dic)
 
     # ---------------------------------------------------------------------
-    # MÉTODO 3: Criação do Gráfico
+    # MÉTODO 3: Criação do Gráfico (MODIFICADO)
     # ---------------------------------------------------------------------
 
     def plota_scores(
@@ -154,25 +154,29 @@ class AnaliseScoresQI:
         media_referencia: Optional[float] = None,
         margem_seguranca: Optional[float] = None,
         paleta_cores_hex: Optional[List[str]] = None,
+        titulo_grafico: Optional[str] = None,
+        rotulo_x: Optional[str] = None,
+        rotulo_y: Optional[str] = None,
     ):
         """
-        Gera um gráfico de barras flexível, usando 'QI' ou 'Índice' para agrupar (Hue).
+        Gera um gráfico de barras flexível, usando 'QI' ou 'Índice' para agrupar (Hue),
+        com customização de títulos/rótulos, margem de segurança sombreada e valores nas barras.
         """
 
         # 1. Determinação da Coluna de Agrupamento (HUE)
         if 'QI' in df.columns:
             coluna_hue = 'QI'
-            titulo_agrupamento = 'Categoria de QI'
+            titulo_agrupamento_padrao = 'Categoria de QI'
         elif 'Índice' in df.columns:
             coluna_hue = 'Índice'
-            titulo_agrupamento = 'Índices Fatoriais'
+            titulo_agrupamento_padrao = 'Índices Fatoriais'
         else:
             coluna_hue = None
-            titulo_agrupamento = 'Scores Individuais'
+            titulo_agrupamento_padrao = 'Scores Individuais'
             print("Atenção: Colunas 'QI' ou 'Índice' não encontradas. Plotando sem agrupamento (Hue).")
 
-        # Configuração inicial do estilo
-        sns.set_theme(style="whitegrid")
+        # Configuração inicial do estilo: 'white' remove as linhas de grid.
+        sns.set_theme(style="white")
         plt.figure(figsize=(14, 7))
 
         # Parâmetros base para o barplot
@@ -180,7 +184,8 @@ class AnaliseScoresQI:
             'data': df,
             'x': 'Inteligência',
             'y': 'Scores',
-            'dodge': False
+            'dodge': False,
+            'errorbar': None
         }
 
         # Adiciona Hue e Paleta
@@ -189,16 +194,26 @@ class AnaliseScoresQI:
 
             if paleta_cores_hex and isinstance(paleta_cores_hex, list):
                 barplot_params['palette'] = paleta_cores_hex
-                # Aviso de cores insuficientes (opcional)
                 num_categorias = df[coluna_hue].nunique()
                 if len(paleta_cores_hex) < num_categorias:
                      print(f"AVISO: Paleta customizada tem {len(paleta_cores_hex)} cores, mas há {num_categorias} categorias. Cores serão recicladas.")
             else:
                 barplot_params['palette'] = 'viridis'
 
-        sns.barplot(**barplot_params)
+        ax = sns.barplot(**barplot_params)
 
-        # 3. Adição das Retas de Referência
+
+        # 2. Adição dos Valores no Topo das Barras
+        for p in ax.patches:
+            ax.annotate(format(p.get_height(), '.0f'),
+                        (p.get_x() + p.get_width() / 2., p.get_height()),
+                        ha = 'center', va = 'center',
+                        xytext = (0, 9),
+                        textcoords = 'offset points',
+                        fontsize=9)
+
+
+        # 3. Adição das Retas e da Zona de Referência (Margem de Segurança Sombreada)
         if media_referencia is not None:
 
             plt.axhline(media_referencia, color='red', linestyle='--', linewidth=1.5,
@@ -207,18 +222,46 @@ class AnaliseScoresQI:
             if margem_seguranca is not None and margem_seguranca > 0:
                 limite_sup = media_referencia + margem_seguranca
                 limite_inf = media_referencia - margem_seguranca
+
+                # Colorir o espaço entre as margens
+                plt.axhspan(limite_inf, limite_sup, color='gray', alpha=0.1, label='Zona de Referência')
+
                 plt.axhline(limite_sup, color='green', linestyle=':', linewidth=1,
-                            label=f'Margem Sup. ({limite_sup})')
+                            label=f'Margem Sup. ({limite_sup:.1f})')
                 plt.axhline(limite_inf, color='green', linestyle=':', linewidth=1,
-                            label=f'Margem Inf. ({limite_inf})')
+                            label=f'Margem Inf. ({limite_inf:.1f})')
 
-            plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+            # Ajusta a posição da legenda
+            plt.legend(loc='upper left', bbox_to_anchor=(1.01, 1), borderaxespad=0.)
 
-        # 4. Configurações Finais
+
+        # 4. Configurações Finais (Customização de Título e Rótulos, e Eixos)
         plt.xticks(rotation=45, ha='right', fontsize=10)
-        plt.title(f'Scores dos Subtestes de Inteligência por {titulo_agrupamento}', fontsize=16, pad=20)
-        plt.xlabel('Subteste de Inteligência', fontsize=12)
-        plt.ylabel('Score (0-18)', fontsize=12)
+
+        # Título
+        if titulo_grafico:
+            plt.title(titulo_grafico, fontsize=16, pad=20)
+        else:
+            plt.title(f'Scores dos Subtestes de Inteligência por {titulo_agrupamento_padrao}', fontsize=16, pad=20)
+
+        # Rótulo X
+        if rotulo_x:
+            plt.xlabel(rotulo_x, fontsize=12)
+        else:
+            plt.xlabel('Subteste de Inteligência', fontsize=12)
+
+        # Rótulo Y
+        if rotulo_y:
+            plt.ylabel(rotulo_y, fontsize=12)
+        else:
+            plt.ylabel('Score (0-18)', fontsize=12)
+
+        # CORREÇÃO DO EIXO Y:
+        # 1. Define os ticks de 1 a 18 (exclui o 0 para evitar o flutuante).
+        ax.set_yticks(ticks=range(1, self.MAX_SCORE + 1))
+
+        # 2. Define o limite inferior em 0 e superior com espaço para o texto.
+        ax.set_ylim(1, self.MAX_SCORE + 1)
 
         plt.tight_layout(rect=[0, 0, 1, 1])
         plt.show()
